@@ -1,181 +1,207 @@
+import boom from '@hapi/boom'
 import Hapi from '@hapi/hapi'
-import Joi from '@hapi/joi'
+import Joi, { options } from '@hapi/joi'
 
-// plugin to instantiate Prisma Client
+const userInputValidator = Joi.object({
+    firstName: Joi.string().alter({
+        create: schema => schema.required(),
+        update: schema => schema.optional()
+    }),
+    lastName: Joi.string().alter({
+        create: schema => schema.required(),
+        update: schema => schema.optional()
+    }),
+    email:
+        Joi.string().email().alter({
+            create: schema => schema.required(),
+            update: schema => schema.optional()
+        }),
+    social: Joi.object({
+        facebook: Joi.string().optional(),
+        twitter: Joi.string().optional(),
+        github: Joi.string().optional(),
+        website: Joi.string().optional(),
+    }).optional(),
+})
+
+const createUserValidator = userInputValidator.tailor('create')
+const updateUserValidator = userInputValidator.tailor('update')
+
 const usersPlugin = {
-  name: 'app/users',
-  dependencies: ['prisma'],
-  register: async function (server: Hapi.Server) {
-    server.route([
-      {
-        method: 'GET',
-        path: '/users/{userId}',
-        handler: getUserHandler,
-        options: {
-          validate: {
-            params: Joi.object({
-              userId: Joi.string().pattern(/^[0-9]+$/),
-            }),
-            failAction: (request, h, err) => {
-              // show validation errors to user https://github.com/hapijs/hapi/issues/3706
-              throw err
+    name: 'app/users',
+    dependencies: ['prisma'],
+    register: async (server: Hapi.Server) => {
+        server.route([
+            {
+                method: 'POST',
+                path: '/users',
+                handler: createUserHandler,
+                options: {
+                    validate: {
+                        payload: createUserValidator,
+                        failAction: (request, h, err) => {
+                            console.error(err);
+                            throw err
+                        },
+                    },
+                }
             },
-          },
-        },
-      },
-      {
-        method: 'POST',
-        path: '/users',
-        handler: registerHandler,
-        options: {
-          validate: {
-            payload: userInputValidator,
-            failAction: (request, h, err) => {
-              // show validation errors to user https://github.com/hapijs/hapi/issues/3706
-              throw err
+            {
+                method: 'GET',
+                path: '/users/{userId}',
+                options: {
+                    validate: {
+                        params: Joi.object({
+                            userId: Joi.number().integer()
+                        }),
+                        failAction: (request, h, err) => {
+                            console.error(err);
+                            throw err
+                        },
+                    }
+                },
+                handler: getUserHandler,
             },
-          },
-        },
-      },
-      {
-        method: 'DELETE',
-        path: '/users/{userId}',
-        handler: deleteHandler,
-        options: {
-          validate: {
-            params: Joi.object({
-              userId: Joi.string().pattern(/^[0-9]+$/),
-            }),
-            failAction: (request, h, err) => {
-              // show validation errors to user https://github.com/hapijs/hapi/issues/3706
-              throw err
+            {
+                method: 'DELETE',
+                path: '/users/{userId}',
+                options: {
+                    validate: {
+                        params: Joi.object({
+                            userId: Joi.number().integer()
+                        }),
+                        failAction: (request, h, err) => {
+                            console.error(err);
+                            throw err
+                        },
+                    }
+                },
+                handler: deleteUserHandler
             },
-          },
-        },
-      },
-      {
-        method: 'PUT',
-        path: '/users/{userId}',
-        handler: updateHandler,
-        options: {
-          validate: {
-            params: Joi.object({
-              userId: Joi.string().pattern(/^[0-9]+$/),
-            }),
-            payload: userInputValidator,
-            failAction: (request, h, err) => {
-              // show validation errors to user https://github.com/hapijs/hapi/issues/3706
-              throw err
-            },
-          },
-        },
-      },
-    ])
-  },
+            {
+                method: 'PUT',
+                path: '/users/{userId}',
+                options: {
+                    validate: {
+                        params: Joi.object({
+                            userId: Joi.number().integer()
+                        }),
+                        payload: updateUserValidator
+                    }
+                },
+                handler: updateUserHandler,
+            }
+        ])
+    }
 }
 
 export default usersPlugin
 
-const userInputValidator = Joi.object({
-  firstName: Joi.string().required(),
-  lastName: Joi.string().required(),
-  email: Joi.string().email().required(),
-  social: Joi.object({
-    facebook: Joi.string().optional(),
-    twitter: Joi.string().optional(),
-    github: Joi.string().optional(),
-    website: Joi.string().optional(),
-  }).optional(),
-})
-
 interface UserInput {
-  firstName: string
-  lastName: string
-  email: string
-  social: {
-    facebook?: string
-    twitter?: string
-    github?: string
-    website?: string
-  }
-}
-
-async function getUserHandler(request: Hapi.Request, h: Hapi.ResponseToolkit) {
-  const { prisma } = request.server.app
-  const userId = request.params.userId as string
-
-  try {
-    const user = await prisma.user.findOne({
-      where: {
-        id: parseInt(userId, 10),
-      },
-    })
-    if (!user) {
-      return h.response().code(404)
-    } else {
-      return h.response(user).code(200)
+    firstName: string
+    lastName: string
+    email: string
+    social: {
+        facebook?: string
+        twitter?: string
+        github?: string
+        website?: string
     }
-  } catch (err) {
-    console.log(err)
-    return h.response().code(500)
-  }
 }
 
-async function registerHandler(request: Hapi.Request, h: Hapi.ResponseToolkit) {
-  const { prisma } = request.server.app
-  const payload = request.payload as UserInput
-
-  try {
-    const createdUser = await prisma.user.create({
-      data: {
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        email: payload.email,
-        // social: JSON.stringify(payload.social),
-        social: payload.social,
-      },
-      select: {
-        id: true,
-      },
-    })
-    return h.response(createdUser).code(200)
-  } catch (err) {
-    console.log(err)
-  }
+export const createUserHandler = async (request: Hapi.Request, h: Hapi.ResponseToolkit) => {
+    const { prisma } = request.server.app
+    const payload = request.payload as UserInput
+    try {
+        const createUser = await prisma.user.create({
+            data: {
+                firstName: payload.firstName,
+                lastName: payload.lastName,
+                email: payload.email,
+                social: JSON.stringify(payload.social)
+            },
+            select: {
+                id: true
+            }
+        })
+        console.log({ createUser })
+        return h.response(createUser).code(201)
+    } catch (error) {
+        console.log(error)
+        return h.response(boom.badImplementation("Error creating user"))
+    }
 }
 
-async function deleteHandler(request: Hapi.Request, h: Hapi.ResponseToolkit) {
-  const { prisma } = request.server.app
-  const userId = request.params.userId as string
-
-  try {
-    await prisma.user.delete({
-      where: {
-        id: parseInt(userId, 10),
-      },
-    })
-    return h.response().code(204)
-  } catch (err) {
-    console.log(err)
-    return h.response().code(500)
-  }
+export const getUserHandler = async (request: Hapi.Request, h: Hapi.ResponseToolkit) => {
+    const { prisma } = request.server.app
+    const userId = parseInt(request.params.userId, 10)
+    try {
+        const user = await prisma.user.findFirst({
+            where: {
+                id: userId
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                social: true
+            }
+        })
+        console.log({ user })
+        if (!user) {
+            return h.response('User not found').code(404)
+        } else {
+            return h.response(user).code(200)
+        }
+    } catch (err) {
+        console.log(err)
+        return h.response('User not found').code(500)
+    }
 }
 
-async function updateHandler(request: Hapi.Request, h: Hapi.ResponseToolkit) {
-  const { prisma } = request.server.app
-  const userId = request.params.userId as string
-  const payload = request.payload as UserInput
+export const deleteUserHandler = async (request: Hapi.Request, h: Hapi.ResponseToolkit) => {
+    const { prisma } = request.server.app
+    const userId = parseInt(request.params.userId, 10)
+    try {
+        const user = await prisma.user.delete({
+            where: {
+                id: userId
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                social: true
+            }
+        })
+        return h.response('User deleted').code(204)
+    } catch (err) {
+        console.log(err)
+        return h.response('User not found').code(500)
+    }
+}
 
-  try {
-    await prisma.user.update({
-      where: {
-        id: parseInt(userId, 10),
-      },
-      data: payload,
-    })
-    return h.response().code(204)
-  } catch (err) {
-    console.log(err)
-    return h.response().code(500)
-  }
+export const updateUserHandler = async (request: Hapi.Request, h: Hapi.ResponseToolkit) => {
+    const { prisma } = request.server.app
+    const userId = parseInt(request.params.userId, 10)
+    const payload = request.payload as Partial<UserInput>
+    try {
+        const user = await prisma.user.update({
+            data: payload,
+            where: {
+                id: userId
+            }
+        })
+        console.log({ user })
+        if (!user) {
+            return h.response('User not found').code(404)
+        } else {
+            return h.response(user).code(200)
+        }
+    } catch (err) {
+        console.log(err)
+        return h.response('User not found').code(500)
+    }
 }

@@ -29,6 +29,7 @@ describe('POST /users - create user', () => {
       }
     })
 
+    console.log({response})
     userId = JSON.parse(response.payload)?.id
 
     expect(response.statusCode).toEqual(200)

@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client'
 import Hapi from '@hapi/hapi'
+import { PrismaClient } from '@prisma/client'
 
 // Module augmentation to add shared application state
 // https://github.com/DefinitelyTyped/DefinitelyTyped/issues/33809#issuecomment-472103564
@@ -15,7 +15,7 @@ const prismaPlugin: Hapi.Plugin<null> = {
   register: async function (server: Hapi.Server) {
     const prisma = new PrismaClient({
       // Uncomment 👇 for logs
-      // log: ['error', 'warn', 'query'],
+      log: ['error', 'warn', 'query'],
     })
 
     server.app.prisma = prisma
@@ -25,7 +25,7 @@ const prismaPlugin: Hapi.Plugin<null> = {
     server.ext({
       type: 'onPostStop',
       method: async (server: Hapi.Server) => {
-        server.app.prisma.disconnect()
+        server.app.prisma.$disconnect()
       },
     })
   },
